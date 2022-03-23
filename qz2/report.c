@@ -11,101 +11,85 @@ typedef struct lotto_record{
     char lotto_time[32];
 }lotto_record_t;
 
+typedef struct lotto_copy{
+    int copy_date;
+    int copy_no;
+    int copy_group;
+    int copy_receipt;
+    char cp_date[32];
+}lotto_copy_t;
+
+typedef struct lotto_total{
+    int total_date;
+    int total_no;
+    int total_group;
+    int total_receipt;
+}lotto_total_t;
+
 int main(){
-    lotto_record_t record;
-    FILE* fp_bin;
-    FILE* fp_txt;
-    FILE* fp_user;
-    FILE* fp_record;
-    int count[]={1};
-    if((fp_bin=fopen("count.bin","rb")) != NULL){
-        fread(count, sizeof(count), 1 ,fp_bin);
-        fclose(fp_bin);
+    FILE* rfp = fopen("records.bin", "r");
+    char line_ch;
+    int count = 0;
+    while((line_ch = fgetc(rfp)) != EOF){
+        count++;
     }
-    else{
-        fp_bin=fopen("count.bin","wb+");
-        fwrite(count, sizeof(count), 1, fp_bin);
-        fclose(fp_bin);
+    int total_record = count/sizeof(lotto_record_t);
+    fclose(rfp);
+
+    rfp = fopen("records.bin", "r");
+    lotto_record_t tmp[total_record];
+    lotto_copy_t copy[total_record];
+    lotto_total_t total;
+    fread(&tmp, sizeof(lotto_record_t), total_record, rfp);
+
+    for(int i = 0; i < total_record; i++){
+        total.total_date++;
+        strcpy(copy[i].cp_date,tmp[i].lotto_date);
+        copy[i].copy_no = tmp[i].lotto_no;
+        copy[i].copy_receipt = tmp[i].lotto_receipt;
+        copy[i].copy_group = tmp[i].lotto_receipt/55;
     }
-    
-    time_t curtime;
-    time(&curtime);
-    int arr_num[5][7],group,flag,temp,user_id[1];
-    srand((unsigned) time(NULL));
-
-    printf("歡迎光臨長庚樂透彩購買機台,請問您要買幾組樂透彩:");
-    scanf("%d",&group);
-    printf("請輸入操作人員ID:");
-    scanf("%d",&user_id[0]);
-
-    fp_user=fopen("operator_id.bin","wb+");
-    fwrite(user_id, sizeof(user_id), 1, fp_user);
-    fclose(fp_user);
-
-    char filename[50];
-    snprintf(filename, sizeof(filename), "lotto[%05d].txt",count[0]);
-    fp_txt = fopen(filename,"w+");
-    fprintf(fp_txt,"========= lotto649 =========\n");
-    fprintf(fp_txt,"========+ No.%05d +========\n",count[0]);
-    fprintf(fp_txt,"= %.*s =\n", 24, ctime(&curtime));
-    for(int i=0; i<5; i++){
-        if(group>=(i+1)){
-            for(int j=0; j<=6;){
-                do{
-                    j!=6? (arr_num[i][j] = rand()%69+1) : (arr_num[i][j] = rand()%10+1);
-                    flag=0;
-                    for(int k=0; k<j; k++){
-                        temp=0;
-                        if(arr_num[i][j]==arr_num[i][k]){
-                            flag=1;
-                        }
-                        else if(j<5 && arr_num[i][j]<arr_num[i][k]){
-                            temp=arr_num[i][j];
-                            arr_num[i][j]=arr_num[i][k];
-                            arr_num[i][k]=temp;
-                        }
-                    }
-                }while(flag==1);
-                j++;
+    int i,j,document = 0;
+    for(i = 0; i < total_record; i++){
+        document = i + 1;
+        for(j= i+1; j < total_record; j++){
+            if(strcmp(copy[j].cp_date,tmp[i].lotto_date)==0){
+                copy[i].copy_no = copy[j].copy_no;
+                copy[i].copy_group += copy[j].copy_group;
+                copy[i].copy_receipt += copy[j].copy_receipt;
             }
+            else break;
         }
-    }
-
-    for(int i=0; i<5; i++){
-        fprintf(fp_txt,"[%d] : ",i+1);
-        for(int j=0; j<=6; j++){
-            if(group>=(i+1)){
-                fprintf(fp_txt,"%02d ",arr_num[i][j]);
-            }
-            else{
-                fprintf(fp_txt,"-- ");
-            }
+        if(j == total_record-1){
+            break;
         }
-        fprintf(fp_txt,"\n");
+        else i = j - 1;
     }
+    fclose(rfp);
 
-    fp_user = fopen("operator_id.bin","rb");
-    fread(user_id, sizeof(user_id), 1 ,fp_user);
-    fclose(fp_user);
-    fprintf(fp_txt, "========* Op.%05d *========\n", user_id[0]);
-
-    fprintf(fp_txt, "========= csie@CGU =========\n");
-    printf("已為您購買的%d組樂透組合輸出至%s\n",group,filename);
-    fclose(fp_txt);
-
-    
-    record.lotto_no = count[0];
-    record.lotto_receipt = group * 50 * 1.1;
-    record.emp_id = user_id[0];
+    FILE* wfp = fopen("report.txt", "w+");
+    fprintf(wfp,"========= lotto649 Report =========\n");
+    fprintf(wfp,"- Date ------ Num. ------ Receipt -\n");
+    for(int i = 0; i < document ; i++){
+        fprintf(wfp,"%s      %d/%d             %d\n",copy[i].cp_date,
+                                                   copy[i].copy_no,
+                                                   copy[i].copy_group,
+                                                   copy[i].copy_receipt);
+        total.total_no += copy[i].copy_no;
+        total.total_group += copy[i].copy_group;
+        total.total_receipt += copy[i].copy_receipt;
+    }
+    fprintf(wfp,"-----------------------------------\n");
+    total.total_date = document;
+    fprintf(wfp,"       %d      %d/%d             %d\n",total.total_date,
+                                                   total.total_no,
+                                                   total.total_group,
+                                                   total.total_receipt);
     time_t now = time(0);
-    strftime(record.lotto_date, 32, "%Y/%m/%d", localtime(&now));
-    strftime(record.lotto_time, 32, "%H:%M:%S", localtime(&now));
-    fp_record = fopen("records.bin","ab");
-    fwrite(&record, sizeof(lotto_record_t), 1, fp_record);
-    fclose(fp_record);
+    char local_date[32];
+    strftime(local_date, 32, "%Y%m%d", localtime(&now));
+    fprintf(wfp,"========= %s Printed ========\n", local_date);
+    fclose(wfp);
 
-    count[0]++;
-    fp_bin=fopen("count.bin","wb+");
-    fwrite(count,sizeof(count),1,fp_bin);
-    fclose(fp_bin);
+    return 0;
 }
